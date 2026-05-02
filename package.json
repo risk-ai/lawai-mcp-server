@@ -1,5 +1,5 @@
 {
-  "name": "@lawai/mcp-server",
+  "name": "lawai-mcp-server",
   "version": "0.2.0",
   "description": "Law.AI MCP Server — Find verified lawyers through any AI assistant. Search 537K+ profiles, match legal issues to attorneys, get cost estimates.",
   "main": "dist/index.js",
@@ -24,16 +24,25 @@
     "test:smoke": "tsx tests/smoke.ts",
     "test:phase2": "tsx tests/smoke-phase2.ts"
   },
-  "keywords": ["mcp", "model-context-protocol", "legal", "lawyer", "directory", "law.ai", "attorney", "legal-tech"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "legal",
+    "lawyer",
+    "directory",
+    "law.ai",
+    "attorney",
+    "legal-tech"
+  ],
   "author": "Law.AI <dev@law.ai>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/law-ai/mcp-server.git"
+    "url": "https://github.com/risk-ai/lawai-mcp-server.git"
   },
   "homepage": "https://law.ai",
   "bugs": {
-    "url": "https://github.com/law-ai/mcp-server/issues"
+    "url": "https://github.com/risk-ai/lawai-mcp-server/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

@@ -19,10 +19,18 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "law-ai": {
       "command": "npx",
-      "args": ["@lawai/mcp-server"]
+      "args": ["lawai-mcp-server"]
     }
   }
 }
+```
+
+### Remote (HTTP Transport)
+
+Connect to the hosted endpoint:
+
+```
+https://mcp.law.ai/mcp
 ```
 
 ### Cursor / VS Code
@@ -33,7 +41,7 @@ Add to your MCP settings:
 {
   "law-ai": {
     "command": "npx",
-    "args": ["@lawai/mcp-server"]
+    "args": ["lawai-mcp-server"]
   }
 }
 ```
@@ -41,8 +49,8 @@ Add to your MCP settings:
 ### From Source
 
 ```bash
-git clone https://github.com/law-ai/mcp-server.git
-cd mcp-server
+git clone https://github.com/risk-ai/lawai-mcp-server.git
+cd lawai-mcp-server
 npm install
 npm run build
 npm start
