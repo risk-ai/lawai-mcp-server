@@ -1,0 +1,52 @@
+{
+  "name": "@lawai/mcp-server",
+  "version": "0.2.0",
+  "description": "Law.AI MCP Server — Find verified lawyers through any AI assistant. Search 537K+ profiles, match legal issues to attorneys, get cost estimates.",
+  "main": "dist/index.js",
+  "bin": {
+    "lawai-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "dev:http": "tsx src/http-server.ts",
+    "start": "node dist/index.js",
+    "start:http": "node dist/http-server.js",
+    "test": "tsx tests/regression-runner.ts",
+    "test:smoke": "tsx tests/smoke.ts",
+    "test:phase2": "tsx tests/smoke-phase2.ts"
+  },
+  "keywords": ["mcp", "model-context-protocol", "legal", "lawyer", "directory", "law.ai", "attorney", "legal-tech"],
+  "author": "Law.AI <dev@law.ai>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/law-ai/mcp-server.git"
+  },
+  "homepage": "https://law.ai",
+  "bugs": {
+    "url": "https://github.com/law-ai/mcp-server/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "pg": "^8.13.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
