@@ -1,7 +1,8 @@
 {
   "name": "lawai-mcp-server",
-  "version": "0.2.0",
-  "description": "Law.AI MCP Server — Find verified lawyers through any AI assistant. Search 537K+ profiles, match legal issues to attorneys, get cost estimates.",
+  "version": "0.2.1",
+  "mcpName": "ai.law/lawyer-search",
+  "description": "Verified lawyer and attorney search, discovery, and matching for AI — 991K+ bar-verified US profiles.",
   "main": "dist/index.js",
   "bin": {
     "lawai-mcp": "./dist/index.js"
