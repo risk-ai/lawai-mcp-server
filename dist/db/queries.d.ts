@@ -6,6 +6,12 @@ export declare function searchLawyers(params: {
     bar_status?: string;
     limit?: number;
     offset?: number;
+    firm_size?: 'solo' | 'small' | 'medium' | 'large';
+    min_experience_years?: number;
+    max_experience_years?: number;
+    languages?: string[];
+    min_rating?: number;
+    claimed_only?: boolean;
 }): Promise<LawyerSummary[]>;
 export declare function getLawyerProfile(lawyerId: number): Promise<LawyerProfile | null>;
 export declare function findLawyerByName(name: string, state?: string): Promise<LawyerSummary[]>;

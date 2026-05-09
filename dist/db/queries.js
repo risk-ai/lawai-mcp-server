@@ -23,6 +23,24 @@ function normalizeState(input) {
     const code = index_js_1.US_STATES[trimmed.toLowerCase()];
     return code || null;
 }
+// Normalize bar_status to canonical DB value so the btree index on bar_status can be used.
+// DB values: Active, Delinquent, Disbarred, Suspended, Incapacitated, Inactive,
+// 'Due to reregister within 30 days of birthday', 'Resigned from bar - disciplinary reason'.
+const BAR_STATUS_CANONICAL = {
+    'active': 'Active',
+    'delinquent': 'Delinquent',
+    'disbarred': 'Disbarred',
+    'suspended': 'Suspended',
+    'incapacitated': 'Incapacitated',
+    'inactive': 'Inactive',
+    'resigned': 'Resigned from bar - disciplinary reason',
+};
+function normalizeBarStatus(input) {
+    const key = input.trim().toLowerCase();
+    if (!key)
+        return null;
+    return BAR_STATUS_CANONICAL[key] || null;
+}
 // Clean practice areas — filter out dirty/bio data
 function cleanPracticeAreas(raw) {
     if (!raw)
@@ -33,6 +51,14 @@ function cleanPracticeAreas(raw) {
 }
 async function searchLawyers(params) {
     const pool = (0, connection_js_1.getPool)();
+    // Sanity bounds on free-text inputs — prevents pathological full-table scans against unindexable predicates.
+    // No real practice_area, city, or bar_status value is longer than 80 chars.
+    const MAX_TEXT_LEN = 80;
+    if ((params.practice_area && params.practice_area.length > MAX_TEXT_LEN) ||
+        (params.city && params.city.length > MAX_TEXT_LEN) ||
+        (params.bar_status && params.bar_status.length > MAX_TEXT_LEN)) {
+        return [];
+    }
     const conditions = ['l.is_active = true'];
     const values = [];
     let paramIdx = 1;
@@ -55,21 +81,81 @@ async function searchLawyers(params) {
         paramIdx++;
     }
     if (params.bar_status && params.bar_status.toLowerCase() !== 'any') {
-        conditions.push(`LOWER(l.bar_status) = LOWER($${paramIdx})`);
-        values.push(params.bar_status.trim());
+        // Database stores canonical title-case values for bar_status (e.g. 'Active', 'Delinquent', 'Disbarred',
+        // 'Suspended', 'Inactive'). Use a normalized equality so the btree index on bar_status is hit (LOWER()
+        // wrapper or ILIKE both force a sequential scan against ~838K active lawyers, blowing the statement timeout).
+        const normalized = normalizeBarStatus(params.bar_status);
+        if (normalized) {
+            conditions.push(`l.bar_status = $${paramIdx}`);
+            values.push(normalized);
+            paramIdx++;
+        }
+        else {
+            // Unknown bar_status value — nothing will match, but keep the query well-formed.
+            conditions.push(`l.bar_status = $${paramIdx}`);
+            values.push(params.bar_status.trim());
+            paramIdx++;
+        }
+    }
+    // Advanced filters
+    if (params.firm_size) {
+        // Firm size heuristic based on practice_areas count and firm name patterns
+        switch (params.firm_size) {
+            case 'solo':
+                conditions.push(`(l.firm IS NULL OR LOWER(l.firm) LIKE '%solo%' OR LOWER(l.firm) LIKE '%pllc%' OR LOWER(l.firm) LIKE '%law office%')`);
+                break;
+            case 'small':
+                conditions.push(`(array_length(l.practice_areas, 1) BETWEEN 1 AND 3 AND l.firm IS NOT NULL AND LOWER(l.firm) NOT LIKE '%llp%' AND LOWER(l.firm) NOT LIKE '%associates%')`);
+                break;
+            case 'medium':
+                conditions.push(`(array_length(l.practice_areas, 1) BETWEEN 3 AND 6 OR LOWER(l.firm) LIKE '%associates%' OR LOWER(l.firm) LIKE '%partners%')`);
+                break;
+            case 'large':
+                conditions.push(`(array_length(l.practice_areas, 1) > 6 OR LOWER(l.firm) LIKE '%llp%' OR LOWER(l.firm) LIKE '%international%')`);
+                break;
+        }
+    }
+    if (params.min_experience_years) {
+        conditions.push(`l.experience_years >= $${paramIdx}`);
+        values.push(params.min_experience_years);
         paramIdx++;
+    }
+    if (params.max_experience_years) {
+        conditions.push(`l.experience_years <= $${paramIdx}`);
+        values.push(params.max_experience_years);
+        paramIdx++;
+    }
+    if (params.languages && params.languages.length > 0) {
+        // Check if any of the requested languages are in the lawyer's languages array
+        const languageConditions = params.languages.map(() => {
+            const condition = `EXISTS (SELECT 1 FROM unnest(l.languages) lang WHERE LOWER(TRIM(lang)) = LOWER($${paramIdx}))`;
+            paramIdx++;
+            return condition;
+        });
+        conditions.push(`(${languageConditions.join(' OR ')})`);
+        values.push(...params.languages.map(lang => lang.trim()));
+    }
+    if (params.min_rating) {
+        conditions.push(`l.rating >= $${paramIdx}`);
+        values.push(params.min_rating);
+        paramIdx++;
+    }
+    if (params.claimed_only) {
+        conditions.push(`l.claimed = true`);
     }
     const limit = Math.min(params.limit || 10, 50);
     const offset = params.offset || 0;
     const query = `
     SELECT l.id, l.name, l.practice_areas, l.city, l.region, l.firm,
-           l.bar_status, l.claimed, l.rating, l.review_count, l.slug
+           l.bar_status, l.claimed, l.rating, l.review_count, l.slug,
+           l.experience_years, l.languages
     FROM lawai.lawyers l
     WHERE ${conditions.join(' AND ')}
     ORDER BY
       l.claimed DESC,
       l.rating DESC NULLS LAST,
       l.review_count DESC NULLS LAST,
+      l.experience_years DESC NULLS LAST,
       l.bio IS NOT NULL DESC
     LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
   `;
@@ -182,17 +268,11 @@ async function findLawyerByName(name, state) {
 }
 async function getPracticeAreas() {
     const pool = (0, connection_js_1.getPool)();
+    // Use materialized view for fast, clean results
     const result = await pool.query(`
-    SELECT TRIM(pa) as practice_area, COUNT(*) as lawyer_count
-    FROM lawai.lawyers l, unnest(l.practice_areas) pa
-    WHERE l.is_active = true
-      AND LENGTH(TRIM(pa)) > 0
-      AND LENGTH(TRIM(pa)) < 80
-      AND TRIM(pa) NOT LIKE '%$%'
-      AND TRIM(pa) NOT LIKE '%|%'
-    GROUP BY TRIM(pa)
-    HAVING COUNT(*) >= 10
-    ORDER BY COUNT(*) DESC
+    SELECT practice_area, lawyer_count
+    FROM public.mv_clean_practice_areas
+    ORDER BY lawyer_count DESC
   `);
     return result.rows.map(row => ({
         name: row.practice_area,
@@ -201,15 +281,11 @@ async function getPracticeAreas() {
 }
 async function getJurisdictions() {
     const pool = (0, connection_js_1.getPool)();
+    // Use materialized view for fast, clean results
     const result = await pool.query(`
-    SELECT l.region, COUNT(*) as lawyer_count
-    FROM lawai.lawyers l
-    WHERE l.is_active = true
-      AND l.region IS NOT NULL
-      AND LENGTH(l.region) = 2
-      AND l.country = 'US'
-    GROUP BY l.region
-    ORDER BY COUNT(*) DESC
+    SELECT region, lawyer_count
+    FROM public.mv_clean_jurisdictions
+    ORDER BY lawyer_count DESC
   `);
     return result.rows.map(row => ({
         state: index_js_1.STATE_NAMES[row.region] || row.region,
